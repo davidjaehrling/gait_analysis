@@ -10,6 +10,9 @@ class SkeletonVisualizer:
         self.skeleton_definition = skeleton_definition
         self.keypoints_definition = keypoints_definition
 
+    
+    
+
     def draw_skeleton(self, frame, df_frame: pd.DataFrame, person_idx: int,):
         """
         Draws the skeleton of a single person on the given frame 
@@ -18,7 +21,9 @@ class SkeletonVisualizer:
         keypoint_dict = self.keypoints_definition
         skeleton = self.skeleton_definition
 
-        person = df_frame.loc[person_idx]
+
+        person = df_frame[df_frame["person_idx"] == person_idx]
+
 
         color = (0, 255, 0)
         # Define colors for right and left keypoints
@@ -27,29 +32,32 @@ class SkeletonVisualizer:
 
         # Draw keypoints
         for keypoint in keypoint_dict.values():
-            if not np.isnan(person[f"{keypoint}_x"]) and not np.isnan(person[f"{keypoint}_y"]):
-                x, y = int(person[f"{keypoint}_x"]), int(person[f"{keypoint}_y"])
-                
-                if person[f"{keypoint}_c"] > 0.1:
-                    
-                    if 'right' in keypoint:
-                        cv2.circle(frame, (x, y), 5, right_color, -1)
-                    elif 'left' in keypoint:
-                        cv2.circle(frame, (x, y), 5, left_color, -1)
-                    else:
-                        cv2.circle(frame, (x, y), 5, color, -1)
+            if not person.empty:
+                x_val = person[f"{keypoint}_x"].values[0]
+                y_val = person[f"{keypoint}_y"].values[0]
+                if not np.isnan(x_val) and not np.isnan(y_val):
+                    x, y = int(person[f"{keypoint}_x"].iloc[0]), int(person[f"{keypoint}_y"].iloc[0])
+                            
+                    if person[f"{keypoint}_c"].iloc[0] > 0.1:
+                        
+                        if 'right' in keypoint:
+                            cv2.circle(frame, (x, y), 5, right_color, -1)
+                        elif 'left' in keypoint:
+                            cv2.circle(frame, (x, y), 5, left_color, -1)
+                        else:
+                            cv2.circle(frame, (x, y), 5, color, -1)
 
         # Draw person_idx
-        if not np.isnan(person['right_ear_x']) and not np.isnan(person['right_ear_y']):   # Check if the nose keypoint is present
+        if not np.isnan(person['right_ear_x'].iloc[0]) and not np.isnan(person['right_ear_y'].iloc[0]):   # Check if the nose keypoint is present
             cv2.putText(frame, f"ID {person_idx}", 
-                        (int(person['right_ear_x']), int(person['right_ear_y'] - 10)), 
+                        (int(person['right_ear_x'].iloc[0]), int(person['right_ear_y'].iloc[0] - 10)), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
             
             # Draw skeletons
             for kp1, kp2 in skeleton:
-                x1, y1 = int(person[f"{kp1}_x"]), int(person[f"{kp1}_y"])
-                x2, y2 = int(person[f"{kp2}_x"]), int(person[f"{kp2}_y"])
-                if person[f"{kp1}_c"] > 0.1 and person[f"{kp2}_c"] > 0.1:
+                x1, y1 = int(person[f"{kp1}_x"].iloc[0]), int(person[f"{kp1}_y"].iloc[0])
+                x2, y2 = int(person[f"{kp2}_x"].iloc[0]), int(person[f"{kp2}_y"].iloc[0])
+                if person[f"{kp1}_c"].iloc[0] > 0.1 and person[f"{kp2}_c"].iloc[0] > 0.1:
                     if not np.isnan(x1) and not np.isnan(y1) and not np.isnan(x2) and not np.isnan(y2):
                         if 'right' in kp1 or 'right' in kp2:
                             cv2.line(frame, (x1, y1), (x2, y2), right_color, 2)
@@ -82,9 +90,9 @@ class SkeletonVisualizer:
 
             # Filter df by the current frame
             df_frame = df[df["frame"] == i]
-
+            
             # Draw the skeleton for all persons
-            for person_idx, person in df_frame.iterrows():
+            for person_idx in df_frame["person_idx"].unique():
                 self.draw_skeleton(frame, df_frame, person_idx)
 
             cv2.putText(frame, f"Frame {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)

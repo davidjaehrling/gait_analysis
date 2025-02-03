@@ -10,7 +10,8 @@ class PersonTracker:
     using:
       - Hungarian assignment for global minimal distance,
       - A constant-velocity prediction model with velocity smoothing,
-      - Optional corridor prioritization (line1, line2).
+      - Optionally corridor prioritization (line1, line2),
+      - Height-based matching to reduce ID swaps.
     """
 
     def __init__(self, 
@@ -18,7 +19,9 @@ class PersonTracker:
                  max_age=30, 
                  velocity_history=5,
                  corridor_line1=None,
-                 corridor_line2=None):
+                 corridor_line2=None,
+                 alpha=1.0,
+                 beta=0.1):
         """
         Parameters
         ----------
@@ -31,6 +34,10 @@ class PersonTracker:
         corridor_line1, corridor_line2 : tuple or None
             If provided, each is a line (A, B, C) from the equation Ax + By + C = 0.
             Used to prioritize the track that remains longest inside the corridor.
+        alpha : float
+            Weight for positional distance in cost.
+        beta : float
+            Weight for height difference in cost.
         """
         self.max_distance = max_distance
         self.max_age = max_age
@@ -38,16 +45,22 @@ class PersonTracker:
         self.line1 = corridor_line1
         self.line2 = corridor_line2
 
+        # Weights for combining distance + height difference
+        self.alpha = alpha
+        self.beta = beta
+
     def track(self, df: pd.DataFrame,
-              keypoint_x='right_shoulder_x',
-              keypoint_y='right_shoulder_y') -> pd.DataFrame:
+              keypoint_x='right_hip_x',
+              keypoint_y='right_hip_y') -> pd.DataFrame:
         """
         Reassigns person indices across frames to yield a consistent 'person_idx'.
 
         Parameters
         ----------
         df : pd.DataFrame
-            Must include columns ['frame', 'person_idx', keypoint_x, keypoint_y, ...].
+            Must include columns: ['frame', keypoint_x, keypoint_y] plus
+            'right_shoulder_x','right_shoulder_y','right_ankle_x','right_ankle_y' 
+            for height computation (if you want height-based matching).
         keypoint_x, keypoint_y : str
             Columns used to represent the position of a person (for matching).
         
@@ -56,8 +69,10 @@ class PersonTracker:
         pd.DataFrame
             The same data but with updated 'person_idx' reflecting consistent identity.
         """
-        if not {'frame', keypoint_x, keypoint_y}.issubset(df.columns):
-            raise ValueError(f"DataFrame must contain 'frame', '{keypoint_x}', '{keypoint_y}' columns.")
+        required_cols = {'frame', keypoint_x, keypoint_y,
+                         'right_shoulder_x','right_shoulder_y','right_ankle_x','right_ankle_y'}
+        if not required_cols.issubset(df.columns):
+            raise ValueError(f"DataFrame must contain columns {required_cols} for height-based tracking.")
 
         # Convert DataFrame rows to a list of dicts for easier manipulation
         data = df.to_dict(orient='records')
@@ -76,6 +91,7 @@ class PersonTracker:
         #   'y': current y,
         #   'vx': average velocity x,
         #   'vy': average velocity y,
+        #   'height': last smoothed height,
         #   'history': [(frame_num, x, y), ...],
         #   'age': number_of_unmatched_frames,
         #   'recent_velocities': [(vx1, vy1), ... up to velocity_history]
@@ -87,11 +103,32 @@ class PersonTracker:
         for frame_id in sorted_frames:
             detections = frames_dict[frame_id]
 
-            # Build a list of coordinates for each detection
+            # Build lists for each detection's main coordinate + height
             coords = []
+            heights = []
+
             for det in detections:
-                x, y = self._parse_float(det.get(keypoint_x)), self._parse_float(det.get(keypoint_y))
+                # Parse main x,y for matching
+                x = self._parse_float(det.get(keypoint_x))
+                y = self._parse_float(det.get(keypoint_y))
+
                 coords.append((x, y))
+
+                # Compute person height from right_shoulder -> right_ankle
+                shx = self._parse_float(det.get('right_shoulder_x'))
+                shy = self._parse_float(det.get('right_shoulder_y'))
+                ax = self._parse_float(det.get('right_ankle_x'))
+                ay = self._parse_float(det.get('right_ankle_y'))
+
+                # If we can't compute, set to None
+                if (shx is None or shy is None or ax is None or ay is None):
+                    person_height = None
+                else:
+                    person_height = self._euclidean_distance(shx, shy, ax, ay)
+
+                # Store in the detection dict, so we can retrieve later
+                det['person_height'] = person_height
+                heights.append(person_height)
 
             # 1) Predict each track's next position using averaged velocity
             track_ids = list(active_tracks.keys())
@@ -116,27 +153,51 @@ class PersonTracker:
 
             # 2) Build cost matrix for the Hungarian algorithm
             cost_matrix = []
-            for (px, py) in predicted_positions:
+            for t_idx, (px, py) in enumerate(predicted_positions):
+                tinfo = active_tracks[track_ids[t_idx]]
+                track_height = tinfo.get('height', None)
+
                 row_cost = []
-                for (dx, dy) in coords:
+                for d_idx, (dx, dy) in enumerate(coords):
                     if dx is None or dy is None:
+                        # Invalid detection coordinates
                         dist = float('inf')
                     else:
                         dist = self._euclidean_distance(px, py, dx, dy)
-                    row_cost.append(dist)
+
+                    # If dist > self.max_distance, we could skip,
+                    # but let's incorporate height anyway:
+                    cost = dist
+
+                    # Now add a term for height difference
+                    det_height = heights[d_idx]
+                    if track_height is not None and det_height is not None:
+                        height_diff = abs(track_height - det_height)
+                        cost += self.beta * height_diff
+
+                    row_cost.append(cost)
+
                 cost_matrix.append(row_cost)
 
             # 3) Solve the assignment problem
-            if len(cost_matrix) > 0 and len(cost_matrix[0]) > 0:
+            if cost_matrix and len(cost_matrix[0]) > 0:
                 cost_matrix_np = np.array(cost_matrix)
                 track_indices, detection_indices = linear_sum_assignment(cost_matrix_np)
             else:
                 track_indices, detection_indices = [], []
 
-            # 4) Filter out matches that exceed max_distance
+            # 4) Filter out matches that exceed max_distance in positional sense
             matches = []
             for t_idx, d_idx in zip(track_indices, detection_indices):
-                if cost_matrix[t_idx][d_idx] < self.max_distance:
+                # The position-based cost is the first part of cost_matrix[t_idx][d_idx]
+                # but let's do an explicit check if the actual position distance < max_distance
+                px, py = predicted_positions[t_idx]
+                dx, dy = coords[d_idx]
+                if dx is None or dy is None:
+                    continue
+                pos_dist = self._euclidean_distance(px, py, dx, dy)
+
+                if pos_dist < self.max_distance:
                     matches.append((t_idx, d_idx))
 
             matched_tracks = set()
@@ -173,6 +234,19 @@ class PersonTracker:
                 tinfo['age'] = 0  # reset unmatched age
                 tinfo['history'].append((frame_id, dx, dy))
 
+                # Update track's height by smoothing
+                det_height = detections[d_idx]['person_height']
+                old_height = tinfo.get('height', None)
+                if det_height is not None:
+                    if old_height is None:
+                        # First time we have a measurement
+                        tinfo['height'] = det_height
+                    else:
+                        # Simple smoothing factor
+                        smoothing_factor = 0.7
+                        tinfo['height'] = (smoothing_factor * old_height 
+                                           + (1 - smoothing_factor) * det_height)
+
                 # Assign corrected_pid to the detection
                 detections[d_idx]['corrected_pid'] = tid
 
@@ -194,15 +268,19 @@ class PersonTracker:
             unmatched_detection_indices = set(range(len(coords))) - matched_detections
             for d_idx in unmatched_detection_indices:
                 dx, dy = coords[d_idx]
-                # Skip invalid detections
                 if dx is None or dy is None:
+                    # Skip invalid detections
                     continue
+
+                # Create new track
+                det_height = detections[d_idx]['person_height']
 
                 active_tracks[next_track_id] = {
                     'x': dx,
                     'y': dy,
                     'vx': 0.0,
                     'vy': 0.0,
+                    'height': det_height,  # start with detection height
                     'history': [(frame_id, dx, dy)],
                     'age': 0,
                     'recent_velocities': []
@@ -211,7 +289,7 @@ class PersonTracker:
                 next_track_id += 1
 
         # ----------------------------------------------------------------------
-        # AFTER assigning corrected_pid, compute total distance for each track.
+        # AFTER assigning corrected_pid, compute total distance for each track
         # ----------------------------------------------------------------------
         track_movement = {}
         for tid, tinfo in active_tracks.items():
@@ -226,8 +304,8 @@ class PersonTracker:
                 total_dist += self._euclidean_distance(x1, y1, x2, y2)
             track_movement[tid] = total_dist
 
-        #  If corridor lines are defined, prioritize the track that spends the
-        #  most frames inside the corridor by artificially boosting its total_dist
+        #  If corridor lines are defined, prioritize the track that spends
+        #  the most frames inside the corridor by artificially boosting total_dist
         if self.line1 is not None and self.line2 is not None:
             best_tid = None
             best_inliers = -1
@@ -258,11 +336,9 @@ class PersonTracker:
             old_tid = row.get('corrected_pid', None)
             if old_tid is not None:
                 row['person_idx'] = track_id_map.get(old_tid, -1)
-            else:
-                # If something never got a corrected_pid for some reason
-                row['person_idx'] = -1
+            # else remains whatever it was (or -1 if you prefer)
 
-        # Clean up extra columns if you want to drop 'corrected_pid'
+        # Optionally drop the 'corrected_pid' column
         for row in data:
             if 'corrected_pid' in row:
                 del row['corrected_pid']
@@ -279,6 +355,8 @@ class PersonTracker:
     # --------------------------------------------------------------------------
     @staticmethod
     def _euclidean_distance(x1, y1, x2, y2):
+        if x1 is None or y1 is None or x2 is None or y2 is None:
+            return float('inf')
         return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
 
     @staticmethod
