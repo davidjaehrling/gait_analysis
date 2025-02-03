@@ -4,6 +4,7 @@ from preprocessing.tracker import PersonTracker
 from preprocessing.outlier_detection import OutlierDetector
 from preprocessing.interpolation import Interpolator
 from analysis.angle_calculator import AngleCalculator
+from manual_correction.reindexing_tool import ReindexingTool
 from visualization.skeleton_visualizer import SkeletonVisualizer
 from utils.paths import path_videos, path_keypoints
 
@@ -36,24 +37,39 @@ def main():
             from config.keypoint_dict import alphapose_skeleton as skeleton
         for participant in participants:
 
-            trials = os.listdir(f"{path_keypoints}\csv\{model_name}\{participant}")
+            trials_path = os.path.join(path_keypoints, "csv", model_name, participant)
+            trials = os.listdir(trials_path)
+            trials = trials[2:3]
             for trial in trials:
                     
                 # 1) Load data
-                df_raw = reader.load_csv(f"{path_keypoints}\csv\{model_name}\{participant}\{trial}")
+                keypoint_path = os.path.join(path_keypoints, "csv", model_name, participant, trial)
+                df_raw = reader.load_csv(keypoint_path)
                 
 
                 # 2) Track persons
-                tracker = PersonTracker(max_distance=50, max_age=100, velocity_history=100)
+                tracker = PersonTracker(max_distance=100, max_age=100, velocity_history=30)
                 df_tracked = tracker.track(df_raw)
 
+                video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
                 visualizer = SkeletonVisualizer(skeleton_definition=skeleton, keypoints_definition=keypoint_dict)
-                visualizer.visualize_video(f"{path_videos}\{participant}\Cut\{trial[:-4]}.mp4", df_tracked)
+                #visualizer.visualize_video(video_path, df_tracked)
 
 
                 # 3) Manual tracking rerassignment
+                tool = ReindexingTool(df_tracked, video_path, visualizer, 
+                                    x_key='right_ankle_x', 
+                                    y_key='right_ankle_y')
 
+                df_corrected = tool.run()
 
+                # delete all non person_idx == 0 rows
+                df_corrected = df_corrected[df_corrected["person_idx"] == 0]
+
+                #visualizer.visualize_video(video_path, df_corrected)
+
+                # 4) Outlier detection
+                print("peinis")
                 '''
                 outlier_detector = OutlierDetector()
                 # build your joint_pairs ...
