@@ -1,5 +1,6 @@
 import pandas as pd
 from abc import ABC, abstractmethod
+import os
 
 class BaseReader(ABC):
     """
@@ -15,3 +16,12 @@ class BaseReader(ABC):
     def load_csv(self, input_path: str) -> pd.DataFrame:
         """Load raw data from a CSV file and return a standardized DataFrame."""
         return pd.read_csv(input_path)
+    
+    @abstractmethod
+    def save_csv(self, df: pd.DataFrame, output_path: str):
+        """Save a DataFrame to a CSV file."""
+        # Make sure the output directory exists.
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        df.to_csv(output_path, index=False)

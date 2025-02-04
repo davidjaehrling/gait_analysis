@@ -51,3 +51,7 @@ class OpenPoseReader(BaseReader):
 
     def load_csv(self, input_path):
         return super().load_csv(input_path)
+    
+    def save_csv(self, df, output_path):
+        return super().save_csv(df, output_path)
+    
