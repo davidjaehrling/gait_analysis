@@ -55,8 +55,17 @@ class SkeletonVisualizer:
             
             # Draw skeletons
             for kp1, kp2 in skeleton:
-                x1, y1 = int(person[f"{kp1}_x"].iloc[0]), int(person[f"{kp1}_y"].iloc[0])
-                x2, y2 = int(person[f"{kp2}_x"].iloc[0]), int(person[f"{kp2}_y"].iloc[0])
+                 
+                x1, y1 = person[f"{kp1}_x"].iloc[0], person[f"{kp1}_y"].iloc[0]
+                x2, y2 = person[f"{kp2}_x"].iloc[0], person[f"{kp2}_y"].iloc[0]
+                
+                if np.isnan(x1) or np.isnan(y1) or np.isnan(x2) or np.isnan(y2):
+                    continue
+
+                x1, y1 = int(x1), int(y1)
+                x2, y2 = int(x2), int(y2)
+
+
                 if person[f"{kp1}_c"].iloc[0] > 0.1 and person[f"{kp2}_c"].iloc[0] > 0.1:
                     if not np.isnan(x1) and not np.isnan(y1) and not np.isnan(x2) and not np.isnan(y2):
                         if 'right' in kp1 or 'right' in kp2:

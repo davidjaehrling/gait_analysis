@@ -35,7 +35,6 @@ class AlphaPoseReader(BaseReader):
                 videos[video_name].append({"frame": frame_number, **entry})
 
             
-            rows = []
             # Process each video
             for video_name, entries in videos.items():
                 # Sort frames by frame number

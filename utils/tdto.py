@@ -137,7 +137,7 @@ def distinct_angles(participant, model_name, reader):
                 "range": combined_series.max() - combined_series.min()
             }
     
-    summary_df = pd.DataFrame(summary_data).T.reset_index().rename(columns={"index": "angle_name"})
+    summary_df = pd.DataFrame(summary_data).reset_index().rename(columns={"index": "statistics"})
     
     return angles_df_combined, summary_df
 

@@ -17,7 +17,7 @@ import shutil
 def main():
     model_readers = {
         "openpose": OpenPoseReader(),
-        #"alphapose": AlphaPoseReader(),
+        "alphapose": AlphaPoseReader(),
     }
     
     angle_definitions = {
@@ -25,6 +25,7 @@ def main():
         'Hip':  ("3pt", ("shoulder", "hip", "knee"), False),
         'Ankle': ("4pt", ("ankle", "knee", "heel", "big_toe"), True),
     }
+
     angle_calculator = AngleCalculator(angle_definitions)
 
     participants = [i for i in os.listdir(path_videos) if i.startswith("P")]
@@ -39,21 +40,24 @@ def main():
             from config.keypoint_dict import alphapose_keypoints as keypoint_dict
             from config.keypoint_dict import alphapose_skeleton as skeleton
 
-        participants = participants[:1]
+        #participants = participants[:1]
         for participant in participants:
             
             trials_path = os.path.join(path_keypoints, "csv", model_name, participant)
             trials = os.listdir(trials_path)
-            trials = trials[2:3]
+            #trials = trials[2:3]
             for trial in trials:
                 # 1) Load data
                 keypoint_path = os.path.join(path_keypoints, "csv", model_name, participant, trial)
                 reindexed_path = os.path.join(path_keypoints, "csv_reindexed", model_name, participant, trial)
                 cleaned_path = os.path.join(path_keypoints, "csv_cleaned", model_name, participant, trial)
-                y_keys = ["right_ankle_y", "right_knee_y", "right_hip_y", "shoulder_y"]
+                
+                if os.path.exists(reindexed_path):
+                    continue
+                print(f"Processing: {participant} - {trial}")
+
 
                 video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
-
                 # temporary copy the video to avoid network issues
                 tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
                 shutil.copy(video_path, tmp_video_path)
@@ -62,9 +66,10 @@ def main():
 
                 # Initialize visualizer
                 visualizer = SkeletonVisualizer(skeleton_definition=skeleton, keypoints_definition=keypoint_dict)
-
+                # Y keys for manual correction plotting
+                y_keys = ["right_ankle_y", "right_knee_y", "right_hip_y", "right_ankle_x", "right_knee_x", "right_hip_x"]
                 
-                '''
+                
                 # 1) Load raw data
                 df_raw = reader.load_csv(keypoint_path)
 
@@ -72,64 +77,64 @@ def main():
                 first_event = get_first_event(trial) - 10
                 
                 # 1.2) Cut data
-                df_raw = df_raw[df_raw["frame"] >= first_event]
+                df = df_raw[df_raw["frame"] >= first_event]
 
                 # 2) Track persons
                 tracker = PersonTracker(max_distance=100, max_age=100, velocity_history=30)
-                df_tracked = tracker.track(df_raw)
-
-                #visualizer.visualize_video(video_path, df_tracked)
+                df = tracker.track(df)
 
 
                 # 2.1) Manual tracking rerassignment
-                y_keys = ["right_ankle_y", "right_knee_y", "right_hip_y"]
-                tool = ReindexingTool(df_tracked, video_path, visualizer, y_keys=y_keys, default_y_key='right_ankle_y')
-                df_corrected = tool.run()
+                tool = ReindexingTool(df, video_path, visualizer, y_keys=y_keys, default_y_key='right_ankle_y')
+                df = tool.run()
 
                 # delete all non person_idx == 0 rows
-                df_corrected = df_corrected[df_corrected["person_idx"] == 0]
-                #visualizer.visualize_video(video_path, df_corrected)
+                df = df[df["person_idx"] == 0]
 
 
                 # 2.2) Save reindexed data
-                reader.save_csv(df_corrected, reindexed_path)
-                
-                df_corrected = reader.load_csv(reindexed_path)
-                #visualizer.visualize_video(video_path, df_corrected)
+                reader.save_csv(df, reindexed_path)
+                df = reader.load_csv(reindexed_path)
 
                 # 3) Outlier detection
-                detector = OutlierDetector(derivative_threshold=2.8, rolling_window_size=20, rolling_k=2.8)
-                df_cleaned = detector.clean(df_corrected)
+                detector = OutlierDetector(derivative_threshold=2.9, rolling_window_size=20, rolling_k=2.8)
+                df_cleaned = detector.clean(df)
 
-                #visualizer.visualize_video(video_path, df_cleaned)
 
-                tool = OutlierCleaningTool(df_cleaned, video_path, visualizer, y_keys)
-                df_cleaned = tool.run()
+                # 3.1) Manual cleaning
+                tool = OutlierCleaningTool(df, video_path, visualizer, y_keys)
+                df = tool.run()
 
-                # 3.1 Save cleaned data
-                reader.save_csv(df_cleaned, cleaned_path)
-                '''
-                df_cleaned = reader.load_csv(cleaned_path)
+                # 3.2 Save cleaned data
+                reader.save_csv(df, cleaned_path)
+                
+                df = reader.load_csv(cleaned_path)
 
                 # 4 Fillter Data
-                detector = OutlierDetector(derivative_threshold=2.8, rolling_window_size=20, rolling_k=2.8)
-                df_filtered = detector.smooth_data(df_cleaned, video_path, cutoff=3.0, order=2)
-                
-                #visualizer.visualize_video(video_path, df_filtered)
+                detector = OutlierDetector(derivative_threshold=2.9, rolling_window_size=20, rolling_k=2.8)
+                df = detector.int_zero(df)
+                df = detector.smooth_data(df, video_path, cutoff=3.0, order=2)
 
                 # 5) Angle calculation
-                df_angles = angle_calculator.getangles(df_filtered, side="right")
+                df_angles = angle_calculator.getangles(df, side="right")
                 #angle_calculator.plot_angles(df_angles)
-                #angle_calculator.vis_angles(df_filtered, df_angles, video_path)
+                #angle_calculator.vis_angles(df, df_angles, video_path)
 
                 # 6) Save final
                 reader.save_csv(df_angles, os.path.join("angles", model_name, participant, trial))
+                
 
+                #df = reader.load_csv(reindexed_path)
+                #selector = ModelSelector(df, video_path, visualizer, y_keys=['right_ankle_x'], default_y_key='right_ankle_x')
+                #stats = selector.run()
+                #print(stats)
+                #selectionstats.append(stats)
                 
-                
+
                 #Delete tmp video
                 if os.path.exists(tmp_video_path):
                     os.remove(tmp_video_path)
+
 
             #combine participant angles
             angles_df_combined, summary_df = distinct_angles(participant, model_name, reader)

@@ -60,7 +60,6 @@ alphapose_keypoints = {
 
 
 alphapose_skeleton = [
-    ('nose', 'left_eye'), ('nose', 'right_eye'), ('left_eye', 'left_ear'), ('right_eye', 'right_ear'),
     ('left_shoulder', 'right_shoulder'), ('left_shoulder', 'left_elbow'), ('right_shoulder', 'right_elbow'),
     ('left_elbow', 'left_wrist'), ('right_elbow', 'right_wrist'), 
     ('left_hip', 'right_hip'), ('left_hip', 'left_knee'),
@@ -150,7 +149,7 @@ openpose_keypoints = {
 
 
 openpose_skeleton = [
-    ('nose', 'neck'), ('neck', 'right_shoulder'), ('right_shoulder', 'right_elbow'),
+    ('neck', 'right_shoulder'), ('right_shoulder', 'right_elbow'),
     ('right_elbow', 'right_wrist'), ('neck', 'left_shoulder'), ('left_shoulder', 'left_elbow'),
     ('left_elbow', 'left_wrist'), ('neck', 'mid_hip'), ('mid_hip', 'right_hip'), ('right_hip', 'right_knee'),
     ('right_knee', 'right_ankle'), ('mid_hip', 'left_hip'), ('left_hip', 'left_knee'), ('left_knee', 'left_ankle'),

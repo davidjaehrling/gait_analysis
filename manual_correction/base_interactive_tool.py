@@ -177,6 +177,14 @@ class BaseInteractiveTool:
         # Overlay the current frame number on the image.
         cv2.putText(frame, f"Frame: {self.current_frame}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, "Press ESC to exit.", (10, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, "Press 'b' for previous frame, 'n' for next frame.",
+                    (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, "right",
+                    (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.putText(frame, "left",
+                    (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0 , 0), 2)
 
         # Reduce resolution for display (optional).
         width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
