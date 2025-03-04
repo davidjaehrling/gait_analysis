@@ -246,6 +246,9 @@ class AngleCalculator:
         
         for idx, row in angles.iterrows():
             frame_num = int(row['frame'])
+
+            
+
             row_df = df[df['frame'] == frame_num].iloc[0]
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
             ret, frame = cap.read()
@@ -297,8 +300,10 @@ class AngleCalculator:
             cv2.imshow("Angle Visualization", frame)
 
             key = cv2.waitKey(1) 
-            if key == 27:  # ESC key pressed
+            #exit when q is pressed
+            if key == ord('q') or key == ord('Q'):
                 break
+            
         
         cap.release()
         cv2.destroyAllWindows()

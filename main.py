@@ -28,7 +28,7 @@ def main():
 
     angle_calculator = AngleCalculator(angle_definitions)
 
-    participants = [i for i in os.listdir(path_videos) if i.startswith("P")]
+    
 
 
     for model_name, reader in model_readers.items():
@@ -39,24 +39,27 @@ def main():
         elif model_name == "alphapose":
             from config.keypoint_dict import alphapose_keypoints as keypoint_dict
             from config.keypoint_dict import alphapose_skeleton as skeleton
-
+            
+        participants = [i for i in os.listdir(os.path.join(path_keypoints, "csv", model_name)) if i.startswith("P")]
+        participants = sorted(participants)
         #participants = participants[:1]
         for participant in participants:
             
             trials_path = os.path.join(path_keypoints, "csv", model_name, participant)
             trials = os.listdir(trials_path)
-            #trials = trials[2:3]
+            #trials = trials[4:5]
+            video_path = "/Users/davidjaehrling/Projects/Forensic biomechanics/Participants/P01/Cut/P01_Med_Side_1.mp4"
             for trial in trials:
                 # 1) Load data
                 keypoint_path = os.path.join(path_keypoints, "csv", model_name, participant, trial)
                 reindexed_path = os.path.join(path_keypoints, "csv_reindexed", model_name, participant, trial)
                 cleaned_path = os.path.join(path_keypoints, "csv_cleaned", model_name, participant, trial)
                 
-                if os.path.exists(reindexed_path):
-                    continue
-                print(f"Processing: {participant} - {trial}")
+                #if os.path.exists(reindexed_path):
+                #   continue
+                print(f"Processing: {model_name} - {participant} - {trial}")
 
-
+                '''
                 video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
                 # temporary copy the video to avoid network issues
                 tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
@@ -107,13 +110,14 @@ def main():
 
                 # 3.2 Save cleaned data
                 reader.save_csv(df, cleaned_path)
-                
+                '''
+
                 df = reader.load_csv(cleaned_path)
 
                 # 4 Fillter Data
                 detector = OutlierDetector(derivative_threshold=2.9, rolling_window_size=20, rolling_k=2.8)
                 df = detector.int_zero(df)
-                df = detector.smooth_data(df, video_path, cutoff=3.0, order=2)
+                df = detector.smooth_data(df, video_path, cutoff=4.0, order=2)
 
                 # 5) Angle calculation
                 df_angles = angle_calculator.getangles(df, side="right")
@@ -123,17 +127,13 @@ def main():
                 # 6) Save final
                 reader.save_csv(df_angles, os.path.join("angles", model_name, participant, trial))
                 
+ 
 
-                #df = reader.load_csv(reindexed_path)
-                #selector = ModelSelector(df, video_path, visualizer, y_keys=['right_ankle_x'], default_y_key='right_ankle_x')
-                #stats = selector.run()
-                #print(stats)
-                #selectionstats.append(stats)
                 
 
                 #Delete tmp video
-                if os.path.exists(tmp_video_path):
-                    os.remove(tmp_video_path)
+                #if os.path.exists(tmp_video_path):
+                 #   os.remove(tmp_video_path)
 
 
             #combine participant angles
