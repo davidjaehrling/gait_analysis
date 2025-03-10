@@ -23,7 +23,7 @@ def main():
     angle_definitions = {
         'Knee': ("3pt", ("hip", "knee", "ankle"), True),
         'Hip':  ("3pt", ("shoulder", "hip", "knee"), False),
-        'Ankle': ("4pt", ("ankle", "knee", "heel", "big_toe"), True),
+        'Ankle': ("4pt", ("ankle", "knee", "heel", "big_toe"), False),
     }
 
     angle_calculator = AngleCalculator(angle_definitions)
@@ -48,24 +48,32 @@ def main():
             trials_path = os.path.join(path_keypoints, "csv", model_name, participant)
             trials = os.listdir(trials_path)
             #trials = trials[4:5]
-            video_path = "/Users/davidjaehrling/Projects/Forensic biomechanics/Participants/P01/Cut/P01_Med_Side_1.mp4"
+
+            #if  participant != "P05":
+            #    continue
+            
             for trial in trials:
                 # 1) Load data
                 keypoint_path = os.path.join(path_keypoints, "csv", model_name, participant, trial)
                 reindexed_path = os.path.join(path_keypoints, "csv_reindexed", model_name, participant, trial)
                 cleaned_path = os.path.join(path_keypoints, "csv_cleaned", model_name, participant, trial)
                 
-                #if os.path.exists(reindexed_path):
-                #   continue
+                if not os.path.exists(reindexed_path):
+                   continue
+
                 print(f"Processing: {model_name} - {participant} - {trial}")
 
-                '''
-                video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
-                # temporary copy the video to avoid network issues
-                tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
-                shutil.copy(video_path, tmp_video_path)
-                video_path = tmp_video_path
+                #if  not "Side" in trial:
+                #    continue
 
+                
+                video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
+                
+                # temporary copy the video to avoid network issues
+                #tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
+                #shutil.copy(video_path, tmp_video_path)
+                #video_path = tmp_video_path
+                '''
 
                 # Initialize visualizer
                 visualizer = SkeletonVisualizer(skeleton_definition=skeleton, keypoints_definition=keypoint_dict)
@@ -110,10 +118,11 @@ def main():
 
                 # 3.2 Save cleaned data
                 reader.save_csv(df, cleaned_path)
+                
                 '''
-
                 df = reader.load_csv(cleaned_path)
 
+                
                 # 4 Fillter Data
                 detector = OutlierDetector(derivative_threshold=2.9, rolling_window_size=20, rolling_k=2.8)
                 df = detector.int_zero(df)

@@ -31,5 +31,5 @@ res = res.groupby('Trial').mean()
 print(res)
 
 # save the result to a new csv file
-res.to_csv('results_mocap_summarized.csv')
+res.to_csv('results/results_mocap_summarized.csv')
 
