@@ -42,12 +42,11 @@ def main():
             
         participants = [i for i in os.listdir(os.path.join(path_keypoints, "csv", model_name)) if i.startswith("P")]
         participants = sorted(participants)
-        #participants = participants[:1]
         for participant in participants:
             
             trials_path = os.path.join(path_keypoints, "csv", model_name, participant)
             trials = os.listdir(trials_path)
-            #trials = trials[4:5]
+            
 
             #if  participant != "P05":
             #    continue
@@ -63,17 +62,17 @@ def main():
 
                 print(f"Processing: {model_name} - {participant} - {trial}")
 
-                #if  not "Side" in trial:
-                #    continue
+                if  not "Side" in trial:
+                    continue
 
                 
                 video_path = os.path.join(path_videos, participant, "Cut", f"{trial[:-4]}.mp4")
                 
                 # temporary copy the video to avoid network issues
-                #tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
-                #shutil.copy(video_path, tmp_video_path)
-                #video_path = tmp_video_path
-                '''
+                tmp_video_path = os.path.join(os.path.dirname(__file__), f"tmp_{trial[:-4]}.mp4")
+                shutil.copy(video_path, tmp_video_path)
+                video_path = tmp_video_path
+                
 
                 # Initialize visualizer
                 visualizer = SkeletonVisualizer(skeleton_definition=skeleton, keypoints_definition=keypoint_dict)
@@ -119,14 +118,14 @@ def main():
                 # 3.2 Save cleaned data
                 reader.save_csv(df, cleaned_path)
                 
-                '''
+                
                 df = reader.load_csv(cleaned_path)
 
                 
                 # 4 Fillter Data
                 detector = OutlierDetector(derivative_threshold=2.9, rolling_window_size=20, rolling_k=2.8)
                 df = detector.int_zero(df)
-                df = detector.smooth_data(df, video_path, cutoff=4.0, order=2)
+                df = detector.smooth_data(df, video_path, cutoff=5.0, order=4)
 
                 # 5) Angle calculation
                 df_angles = angle_calculator.getangles(df, side="right")
